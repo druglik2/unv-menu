@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>서울 소재 대학교 학식 비교 검색기</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Soft Earth (stone-100 background, white cards, teal accent) -->
+    <!-- Application Structure Plan: A dashboard-style SPA. Top section for interactive filters (university, price, meal type). A central, dynamic bar chart visualizes price comparisons based on filters. Below, a responsive grid of cards shows detailed menu info for filtered universities. This task-oriented design allows users to move from broad, quantitative comparison (chart) to specific, qualitative details (cards) intuitively. -->
+    <!-- Visualization & Content Choices: 1. Average Prices -> Compare -> Bar Chart (Chart.js) -> Interactive filtering. Justification: Best for direct numerical comparison. 2. University Details (Menu, Signature) -> Organize/Inform -> HTML Card Grid -> Dynamically populated by JS. Justification: Scannable, structured, and responsive way to present detailed info. 3. Filters -> Control -> HTML inputs/buttons -> JS event listeners update state and re-render. Justification: Standard, intuitive UI controls for data manipulation. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 900px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 40vh;
+            max-height: 450px;
+        }
+        .filter-button.active {
+            background-color: #0d9488; /* teal-600 */
+            color: white;
+            font-weight: 700;
+        }
+        .filter-button {
+            transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-stone-100 text-stone-800">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-teal-800">서울 소재 대학교 학식 비교 검색기</h1>
+            <p class="mt-2 text-stone-600">관심 있는 대학교의 학생 식당 메뉴와 평균 가격을 비교해보세요.</p>
+        </header>
+
+        <section id="controls" class="bg-white p-4 md:p-6 rounded-xl shadow-md mb-8">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="md:col-span-1">
+                    <h3 class="font-bold text-lg mb-2 text-teal-700">🔎 대학교 선택</h3>
+                    <div id="university-filter" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-2">
+                    </div>
+                </div>
+                <div class="md:col-span-1">
+                    <h3 class="font-bold text-lg mb-2 text-teal-700">💸 최대 가격 설정</h3>
+                    <input type="range" id="price-range" min="4000" max="10000" step="500" class="w-full h-2 bg-stone-200 rounded-lg appearance-none cursor-pointer">
+                    <div class="text-center mt-2 font-medium text-stone-700">
+                        최대 <span id="price-value" class="text-teal-600 font-bold"></span>원
+                    </div>
+                </div>
+                <div class="md:col-span-1">
+                    <h3 class="font-bold text-lg mb-2 text-teal-700">🕒 식사 종류</h3>
+                    <div id="meal-type-filter" class="flex justify-around rounded-lg bg-stone-200 p-1">
+                        <button data-meal="lunch" class="filter-button w-full text-center p-2 rounded-md text-sm md:text-base">점심</button>
+                        <button data-meal="dinner" class="filter-button w-full text-center p-2 rounded-md text-sm md:text-base">저녁</button>
+                        <button data-meal="breakfast" class="filter-button w-full text-center p-2 rounded-md text-sm md:text-base">아침</button>
+                    </div>
+                </div>
+            </div>
+             <div class="text-center mt-6">
+                <button id="reset-filters" class="px-6 py-2 bg-teal-600 text-white font-semibold rounded-lg shadow-md hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-opacity-75 transition-transform transform hover:scale-105">
+                    필터 초기화
+                </button>
+            </div>
+        </section>
+
+        <main>
+            <section id="chart-section" class="bg-white p-4 md:p-6 rounded-xl shadow-md mb-8">
+                 <div class="text-left mb-4">
+                    <h2 class="text-2xl font-bold text-teal-800">가격 비교 차트</h2>
+                    <p class="mt-1 text-stone-600">선택된 조건에 맞는 대학교들의 평균 식사 가격을 비교합니다. 막대 위에 마우스를 올리면 정확한 가격을 볼 수 있습니다.</p>
+                </div>
+                <div class="chart-container">
+                    <canvas id="price-chart"></canvas>
+                </div>
+            </section>
+
+            <section id="details-section">
+                 <div class="text-left mb-4">
+                    <h2 class="text-2xl font-bold text-teal-800">상세 정보</h2>
+                    <p class="mt-1 text-stone-600">아래 카드에서 각 대학교의 대표 메뉴와 특징을 확인해보세요.</p>
+                </div>
+                <div id="details-grid" class="grid grid-cols-1 md:grid-cols-2 xl:col-span-3 gap-6">
+                </div>
+            </section>
+        </main>
+
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const cafeteriaData = [
+                { id: 'snu', name: '서울대학교', district: '관악구', breakfast: 4500, lunch: 6000, dinner: 5500, menus: ['설렁탕', '제육볶음', '순두부찌개'], signature: '1000원 학식 (아침)' },
+                { id: 'yonsei', name: '연세대학교', district: '서대문구', breakfast: 5000, lunch: 7000, dinner: 6500, menus: ['치즈돈까스', '고등어구이', '닭갈비덮밥'], signature: '고를샘 (프리미엄)' },
+                { id: 'korea', name: '고려대학교', district: '성북구', breakfast: 4800, lunch: 6500, dinner: 6000, menus: ['뼈해장국', '오므라이스', '마라탕'], signature: '고대빵' },
+                { id: 'sogang', name: '서강대학교', district: '마포구', breakfast: 5500, lunch: 7200, dinner: 6800, menus: ['알밥', '부대찌개', '치킨마요덮밥'], signature: '곤자가 플라자 학식' },
+                { id: 'hanyang', name: '한양대학교', district: '성동구', breakfast: 4200, lunch: 5800, dinner: 5300, menus: ['김치볶음밥', '떡볶이와 튀김', '카레라이스'], signature: '사랑방 (교직원 식당)' },
+                { id: 'cau', name: '중앙대학교', district: '동작구', breakfast: 5200, lunch: 6800, dinner: 6300, menus: ['짜장면', '짬뽕', '탕수육'], signature: 'CAU 버거' },
+                { id: 'khu', name: '경희대학교', district: '동대문구', breakfast: 4900, lunch: 6200, dinner: 5700, menus: ['채식 뷔페', '파스타', '피자'], signature: '생활협동조합 채식' },
+                { id: 'uos', name: '서울시립대학교', district: '동대문구', breakfast: 4000, lunch: 5500, dinner: 5000, menus: ['백반 정식', '라면', '돈부리'], signature: '저렴한 가격' },
+                { id: 'skku', name: '성균관대학교', district: '종로구', breakfast: 5300, lunch: 7500, dinner: 7000, menus: ['학센', '해물파전', '비빔밥'], signature: '금잔디 식당' },
+                { id: 'ewha', name: '이화여자대학교', district: '서대문구', breakfast: 5100, lunch: 6900, dinner: 6400, menus: ['샐러드볼', '샌드위치', '요거트볼'], signature: '헬렌관 채식뷔페' }
+            ];
+
+            const universityFilterEl = document.getElementById('university-filter');
+            const priceRangeEl = document.getElementById('price-range');
+            const priceValueEl = document.getElementById('price-value');
+            const mealTypeFilterEl = document.getElementById('meal-type-filter');
+            const detailsGridEl = document.getElementById('details-grid');
+            const resetBtn = document.getElementById('reset-filters');
+            const chartCanvas = document.getElementById('price-chart').getContext('2d');
+
+            let priceChart;
+
+            let filters = {
+                universities: [],
+                maxPrice: 10000,
+                mealType: 'lunch'
+            };
+
+            function init() {
+                populateUniversityFilter();
+
+                const initialMaxPrice = 10000;
+                priceRangeEl.value = initialMaxPrice;
+                priceValueEl.textContent = initialMaxPrice.toLocaleString();
+                filters.maxPrice = initialMaxPrice;
+                filters.universities = cafeteriaData.map(u => u.id);
+
+                updateMealTypeButtons();
+                setupEventListeners();
+                initializeChart();
+                updateDisplay();
+            }
+
+            function populateUniversityFilter() {
+                cafeteriaData.forEach(uni => {
+                    const label = document.createElement('label');
+                    label.className = "flex items-center space-x-2 cursor-pointer text-sm";
+                    label.innerHTML = `
+                        <input type="checkbox" data-id="${uni.id}" class="form-checkbox h-4 w-4 text-teal-600 border-stone-300 rounded focus:ring-teal-500" checked>
+                        <span>${uni.name}</span>
+                    `;
+                    universityFilterEl.appendChild(label);
+                });
+            }
+
+            function setupEventListeners() {
+                universityFilterEl.addEventListener('change', e => {
+                    if (e.target.type === 'checkbox') {
+                        filters.universities = Array.from(universityFilterEl.querySelectorAll('input:checked')).map(input => input.dataset.id);
+                        updateDisplay();
+                    }
+                });
+
+                priceRangeEl.addEventListener('input', e => {
+                    filters.maxPrice = parseInt(e.target.value);
+                    priceValueEl.textContent = filters.maxPrice.toLocaleString();
+                });
+
+                priceRangeEl.addEventListener('change', updateDisplay);
+
+                mealTypeFilterEl.addEventListener('click', e => {
+                    if (e.target.tagName === 'BUTTON') {
+                        filters.mealType = e.target.dataset.meal;
+                        updateMealTypeButtons();
+                        updateDisplay();
+                    }
+                });
+
+                resetBtn.addEventListener('click', () => {
+                    filters.universities = cafeteriaData.map(u => u.id);
+                    filters.maxPrice = 10000;
+                    filters.mealType = 'lunch';
+
+                    priceRangeEl.value = filters.maxPrice;
+                    priceValueEl.textContent = filters.maxPrice.toLocaleString();
+
+                    Array.from(universityFilterEl.querySelectorAll('input')).forEach(input => input.checked = true);
+
+                    updateMealTypeButtons();
+                    updateDisplay();
+                });
+            }
+
+            function updateMealTypeButtons() {
+                mealTypeFilterEl.querySelectorAll('button').forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.meal === filters.mealType);
+                });
+            }
+
+            function initializeChart() {
+                priceChart = new Chart(chartCanvas, {
+                    type: 'bar',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            label: '평균 가격 (원)',
+                            data: [],
+                            backgroundColor: 'rgba(15, 118, 110, 0.6)', // teal-700 with opacity
+                            borderColor: 'rgb(13, 148, 136)', // teal-600
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        maintainAspectRatio: false,
+                        responsive: true,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) {
+                                        return value.toLocaleString() + '원';
+                                    }
+                                }
+                            },
+                            x: {
+                                ticks: {
+                                    font: {
+                                        size: 10
+                                    }
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        let label = context.dataset.label || '';
+                                        if (label) {
+                                            label += ': ';
+                                        }
+                                        if (context.parsed.y !== null) {
+                                            label += context.parsed.y.toLocaleString() + '원';
+                                        }
+                                        return label;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            function updateDisplay() {
+                const filteredData = cafeteriaData
+                    .filter(uni => filters.universities.includes(uni.id))
+                    .filter(uni => uni[filters.mealType] <= filters.maxPrice);
+
+                updateChart(filteredData);
+                renderDetailsCards(filteredData);
+            }
+
+            function updateChart(data) {
+                const mealTypeKorean = { breakfast: '아침', lunch: '점심', dinner: '저녁' };
+                const sortedData = [...data].sort((a, b) => a[filters.mealType] - b[filters.mealType]);
+
+                priceChart.data.labels = sortedData.map(uni => uni.name);
+                priceChart.data.datasets[0].data = sortedData.map(uni => uni[filters.mealType]);
+                priceChart.data.datasets[0].label = `평균 ${mealTypeKorean[filters.mealType]} 가격 (원)`;
+                priceChart.update();
+            }
+
+            function renderDetailsCards(data) {
+                detailsGridEl.innerHTML = '';
+                if(data.length === 0){
+                    detailsGridEl.innerHTML = `<div class="md:col-span-2 xl:col-span-3 text-center py-12 bg-white rounded-xl shadow-md">
+                        <p class="text-xl text-stone-500">🥲</p>
+                        <p class="mt-2 text-lg font-medium text-stone-500">선택된 조건에 맞는 대학교가 없습니다.</p>
+                        <p class="text-sm text-stone-400">필터 설정을 변경해보세요.</p>
+                    </div>`;
+                    return;
+                }
+
+                const sortedData = [...data].sort((a, b) => a[filters.mealType] - b[filters.mealType]);
+
+                sortedData.forEach(uni => {
+                    const card = document.createElement('div');
+                    card.className = "bg-white p-6 rounded-xl shadow-md transition-transform transform hover:-translate-y-1";
+
+                    const mealPrice = uni[filters.mealType].toLocaleString();
+                    const mealTypeKorean = { breakfast: '아침', lunch: '점심', dinner: '저녁' }[filters.mealType];
+
+                    card.innerHTML = `
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h3 class="text-xl font-bold text-teal-700">${uni.name}</h3>
+                                <p class="text-sm text-stone-500">${uni.district}</p>
+                            </div>
+                            <div class="text-right">
+                                 <p class="text-lg font-bold text-stone-800">${mealPrice}원</p>
+                                 <p class="text-xs text-teal-600 font-semibold">${mealTypeKorean} 평균</p>
+                            </div>
+                        </div>
+                        <div class="mt-4 border-t pt-4">
+                            <h4 class="font-semibold text-stone-700 mb-2">📋 대표 메뉴</h4>
+                            <div class="flex flex-wrap gap-2">
+                                ${uni.menus.map(menu => `<span class="bg-stone-200 text-stone-700 text-sm px-3 py-1 rounded-full">${menu}</span>`).join('')}
+                            </div>
+                        </div>
+                        <div class="mt-4">
+                            <h4 class="font-semibold text-stone-700 mb-2">⭐ 특징</h4>
+                            <p class="text-sm text-stone-600 bg-teal-50 border border-teal-200 p-3 rounded-lg">${uni.signature}</p>
+                        </div>
+                    `;
+                    detailsGridEl.appendChild(card);
+                });
+            }
+
+            init();
+        });
+    </script>
+</body>
+</html>
